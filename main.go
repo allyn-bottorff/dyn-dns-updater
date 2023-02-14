@@ -27,15 +27,26 @@ type UnifiCreds struct {
 	Password string `json:"password"`
 }
 
-type CloudFlareCreds struct {
+type CloudflareCreds struct {
 	Token string `json:"token"`
 }
 
 type Credentials struct {
 	UnifiCreds
-	CloudFlareCreds
+	CloudflareCreds
+}
+
+type CloudflareZoneResult struct {
+	Result []CloudflareZone `json:"result"`
+}
+
+type CloudflareZone struct {
+Name string `json:"name"`
+ID string `json:"id"`
 
 }
+
+
 
 var UnifiLoginURL string = "https://unifi.b6f.net/api/login"
 var UnifiHealthURL string = "https://unifi.b6f.net/api/s/default/stat/health"
@@ -56,7 +67,7 @@ func getSecrets() (Credentials, error) {
 	}
 
 	err = json.Unmarshal(unifiCredsFile, &creds.UnifiCreds)
-	err = json.Unmarshal(cloudFlareFile, &creds.CloudFlareCreds)
+	err = json.Unmarshal(cloudFlareFile, &creds.CloudflareCreds)
 
 	return creds, err
 }

@@ -12,88 +12,34 @@ import (
 	"os"
 )
 
-type UnifiHealth struct {
-	// Meta map[string]map[string]string `json:"meta"`
-	Data []SubsystemHealth `json:"data"`
-}
-
-type SubsystemHealth struct {
-	SubSystem string `json:"subsystem"`
-	WanIP     string `json:"wan_ip"`
-}
-
-type UnifiCreds struct {
+type Secrets struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Token    string `json:"token"`
 }
-
-type CloudflareCreds struct {
-	Token string `json:"token"`
-}
-
-type Credentials struct {
-	UnifiCreds
-	CloudflareCreds
-}
-
-type CloudflareZoneResult struct {
-	Result []CloudflareZone `json:"result"`
-}
-
-type CloudflareZone struct {
-Name string `json:"name"`
-ID string `json:"id"`
-
-}
-
-
-
-var UnifiLoginURL string = "https://unifi.b6f.net/api/login"
-var UnifiHealthURL string = "https://unifi.b6f.net/api/s/default/stat/health"
-var CloudFlareZonesURL string = "https://api.cloudflare.com/client/v4/zones"
-
 
 // Read credentials from kubernetes secrets files as json
-func getSecrets() (Credentials, error) {
-	var creds Credentials
-	unifiCredsFile, err := os.ReadFile("post.json")
+func getSecrets() (Secrets, error) {
+	var secrets Secrets
+	secretsFile, err := os.ReadFile("secrets.json")
 	if err != nil {
-		return creds, err
+		return secrets, err
 	}
 
-	cloudFlareFile, err := os.ReadFile("token.json")
-	if err != nil {
-		return creds, err
-	}
+	err = json.Unmarshal(secretsFile, &secrets)
 
-	err = json.Unmarshal(unifiCredsFile, &creds.UnifiCreds)
-	err = json.Unmarshal(cloudFlareFile, &creds.CloudflareCreds)
 
-	return creds, err
-}
-
-func getCurrentIP(creds &UnifiCreds) string {
-
-	creds
-
+	return secrets, err
 }
 
 func main() {
 	// https://unifi.b6f.net/api/login
 	// https://unifi.b6f.net/api/s/default/stat/health
 
-	credsfile, err := os.ReadFile("post.json")
-	if err != nil {
-		log.Panic(err)
-	}
+	secrets, err := getSecrets()
 
-	var creds Credentials
-	err = json.Unmarshal(credsfile, &creds)
-	if err != nil {
-		log.Panic(err)
-	}
 
-	log.Printf("Found username: %s", creds.Username)
+
 
 	log.Println("Logging into unifi")
 	resp, err := http.Post("https://unifi.b6f.net/api/login", "application/json", bytes.NewReader(credsfile))
@@ -105,7 +51,6 @@ func main() {
 
 	client := &http.Client{}
 
-
 	request, err := http.NewRequest(http.MethodGet, "https://unifi.b6f.net/api/s/default/stat/health", nil)
 	request.AddCookie(resp.Cookies()[0])
 
@@ -113,7 +58,6 @@ func main() {
 
 	var unifiHealth UnifiHealth
 
-	
 	err = json.NewDecoder(healthResp.Body).Decode(&unifiHealth)
 	if err != nil {
 		log.Panic(err)

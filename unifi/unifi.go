@@ -2,9 +2,10 @@ package unifi
 
 import (
 	"bytes"
-	"net/http"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 )
 
 var UnifiLoginURL string = "https://unifi.b6f.net/api/login"
@@ -20,31 +21,17 @@ type SubsystemHealth struct {
 	WanIP     string `json:"wan_ip"`
 }
 
-type UnifiCreds struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+func makeCredsJson(username string, password string) string {
+	credsJson := fmt.Sprintf("{\"username\": \"%s\", \"password\": \"%v\"}", username, password)
+	return credsJson
 }
-
-func (u UnifiCreds) JsonBytes() []byte {
-	jsonBytes, err := json.Marshal(u)
-	if err != nil {
-		log.Panicf("Failed to marshal Unifi credentials JSON: %v",err)
-	}
-	return jsonBytes
-}
-
-
-
-
 
 func getLocalIP(username string, password string) string {
-	creds := UnifiCreds {
-		Username: username,
-		Password: password,
-	}
+
+	credsJson := makeCredsJson(username, password)
 
 	// Log into Unifi Controller
-	loginResp, err := http.Post(UnifiLoginURL, "application/json", bytes.NewReader(creds.JsonBytes()))
+	loginResp, err := http.Post(UnifiLoginURL, "application/json", bytes.NewReader([]byte(credsJson)))
 	if err != nil {
 		log.Panicf("Failed to log into Unifi: %v", err)
 	}

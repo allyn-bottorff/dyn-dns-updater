@@ -1,21 +1,23 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"net/http"
-
-	// "net/http"
-	// "fmt"
-	// "net/http"
 	"log"
 	"os"
+
+	"gihub.com/allyn-bottorff/dyn-dns-updater/unifi"
 )
 
 type Secrets struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Token    string `json:"token"`
+}
+
+type Config struct {
+	UnifiDomain    string   `json:"unifiDomain"`
+	UnifiSiteName  string   `json:"unifiSiteName"`
+	ManagedDomains []string `json:"managedDomains"`
 }
 
 // Read credentials from kubernetes secrets files as json
@@ -28,59 +30,43 @@ func getSecrets() (Secrets, error) {
 
 	err = json.Unmarshal(secretsFile, &secrets)
 
-
 	return secrets, err
 }
 
+func getConfig() (Config, error) {
+	var config Config
+	configFile, err := os.ReadFile("config.json")
+	if err != nil {
+		return config, err
+	}
+
+	err = json.Unmarshal(configFile, &config)
+	if config.UnifiSiteName == "" {
+		config.UnifiSiteName = "default"
+	}
+	return config, err
+}
+
 func main() {
-	// https://unifi.b6f.net/api/login
-	// https://unifi.b6f.net/api/s/default/stat/health
 
 	secrets, err := getSecrets()
-
-
-
-
-	log.Println("Logging into unifi")
-	resp, err := http.Post("https://unifi.b6f.net/api/login", "application/json", bytes.NewReader(credsfile))
-
 	if err != nil {
-		log.Panic(err)
+		log.Panicf("Failed to read secrets: %v", err)
 	}
-	log.Printf("Login results: %v", resp.Status)
 
-	client := &http.Client{}
-
-	request, err := http.NewRequest(http.MethodGet, "https://unifi.b6f.net/api/s/default/stat/health", nil)
-	request.AddCookie(resp.Cookies()[0])
-
-	healthResp, err := client.Do(request)
-
-	var unifiHealth UnifiHealth
-
-	err = json.NewDecoder(healthResp.Body).Decode(&unifiHealth)
+	config, err := getConfig()
 	if err != nil {
-		log.Panic(err)
+		log.Panicf("Failed to read config: %v", err)
 	}
 
-	// file, err := os.ReadFile("unifi-site-health.json")
-	// if err != nil {
-	// 	log.Panic(err)
-	// }
-	// var unifiHealth UnifiHealth
-	// err = json.Unmarshal(file, &unifiHealth)
-	// if err != nil {
-	// 	log.Panic(err)
-	// }
+	// Find Public IP
+	publicIP := unifi.GetLocalIP(
+		secrets.Username,
+		secrets.Password,
+		config.UnifiDomain,
+		config.UnifiSiteName,
+	)
 
-	var ipAddr string
-
-	for _, system := range unifiHealth.Data {
-		if system.SubSystem == "wan" {
-			ipAddr = system.WanIP
-		}
-	}
-
-	log.Print(ipAddr)
+	log.Print(publicIP)
 
 }

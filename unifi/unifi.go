@@ -8,8 +8,6 @@ import (
 	"net/http"
 )
 
-var UnifiLoginURL string = "https://unifi.b6f.net/api/login"
-var UnifiHealthURL string = "https://unifi.b6f.net/api/s/default/stat/health"
 
 type UnifiHealth struct {
 	// Meta map[string]map[string]string `json:"meta"`
@@ -21,17 +19,19 @@ type SubsystemHealth struct {
 	WanIP     string `json:"wan_ip"`
 }
 
-func makeCredsJson(username string, password string) string {
+func makeCredsJson(username string, password string ) string {
 	credsJson := fmt.Sprintf("{\"username\": \"%s\", \"password\": \"%v\"}", username, password)
 	return credsJson
 }
 
-func getLocalIP(username string, password string) string {
+func GetLocalIP(username string, password string, unifidomain string, siteName string) string {
 
 	credsJson := makeCredsJson(username, password)
 
 	// Log into Unifi Controller
-	loginResp, err := http.Post(UnifiLoginURL, "application/json", bytes.NewReader([]byte(credsJson)))
+	unifiLoginURL := fmt.Sprintf("https://%s/api/login", unifidomain)
+	unifiHealthURL := fmt.Sprintf("https://%s/api/s/%s/stat/health", unifidomain, siteName)
+	loginResp, err := http.Post(unifiLoginURL, "application/json", bytes.NewReader([]byte(credsJson)))
 	if err != nil {
 		log.Panicf("Failed to log into Unifi: %v", err)
 	}
@@ -41,7 +41,7 @@ func getLocalIP(username string, password string) string {
 
 	// Get health of default site from Unifi Controller
 	client := &http.Client{}
-	request, err := http.NewRequest(http.MethodGet, UnifiHealthURL, nil)
+	request, err := http.NewRequest(http.MethodGet, unifiHealthURL, nil)
 	request.AddCookie(loginResp.Cookies()[0])
 
 	healthResp, err := client.Do(request)

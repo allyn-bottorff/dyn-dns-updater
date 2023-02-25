@@ -97,6 +97,9 @@ func patchApex(z zone, r record, ipAddr string) error {
 	request, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/%s/dns_records/%s", CloudFlareZonesURL, z.ID, r.ID), nil)
 
 
+	client.Do(request)
+
+
 	return err
 
 }

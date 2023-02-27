@@ -9,6 +9,8 @@ RUN cargo build --release
 COPY ./config.json /secrets/config.json
 
 FROM  debian:bullseye-slim
+LABEL org.opencontainers.image.source=https://github.com/allyn-bottorff/dyn-dns-updater
+RUN apt-get update && apt-get install ca-certificates -y
 RUN mkdir /secrets
 WORKDIR /app
 COPY --from=builder /build/target/release/dyn-dns-updater .

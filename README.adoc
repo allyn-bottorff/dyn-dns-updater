@@ -1,12 +1,34 @@
 = Dynamic DNS Updater
 
-Working version written in Rust with a secondary, mostly complete version
-written in Go (prototype). This project reads a public IP address from a UniFi
-controller and then updates the apex A records for a list of zones in
-CloudFlare DNS.
+This project reads a public IP address from a UniFi controller and then updates
+the apex A records for a list of zones in CloudFlare DNS.
 
 == Assumptions
 
 * UniFi Controller
 ** Default site 
 * CloudFlare DNS
+* Runs in a Docker container. Configuration located at `/secrets/config.json`
+
+== Configuration
+
+[source,json]
+----
+{
+  "unifi_creds": {
+    "username": "username",
+    "password": "password"
+  },
+  "disable_unifi_tls_validation": true,
+  "unifi_url": "https://unifi-controller.url:8443",
+  "cftoken": "cloudflare api token here",
+  "watch_records": ["example.com", "example.net"],
+  "poll_seconds": 600
+}
+----
+
+CAUTION: The `disable_unifi_tls_validation` option disables all TLS validation
+for the calls to the UniFI controller. It exists because UniFi by default uses
+a self-signed certificate. A better option is to supply a valid certificate to
+the UniFi controller and not disable TLS. This option does not disable TLS
+validation for calls to CloudFlare.

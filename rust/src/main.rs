@@ -15,7 +15,9 @@ struct UnifiCreds {
 
 #[derive(Deserialize)]
 struct Config {
-    unifi: UnifiCreds,
+    unifi_creds: UnifiCreds,
+    unifi_url: String,
+    disable_unifi_tls_validation: bool,
     cftoken: String,
     watch_records: Vec<String>,
     poll_seconds: u64,
@@ -66,10 +68,6 @@ type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 /// -- If different, update zone apex records in Cloudflare
 /// Sleep 10 minutes or so.
 fn main() {
-    let mut u_client = reqwest::blocking::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
 
     let conf = match read_config() {
         Ok(c) => c,
@@ -79,13 +77,26 @@ fn main() {
             // continue;
         }
     };
+    let mut u_client = reqwest::blocking::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
+    if conf.disable_unifi_tls_validation {
+    u_client = reqwest::blocking::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    }
+
 
     // Loop forever with a thread sleep
     loop {
         thread::sleep(time::Duration::new(conf.poll_seconds, 0));
 
         println!("Starting IP Sync...");
-        let body = match serde_json::to_string(&conf.unifi) {
+        let body = match serde_json::to_string(&conf.unifi_creds) {
             Ok(b) => b,
             Err(e) => {
                 println!("Failed to parse config: {}", e);
@@ -94,7 +105,7 @@ fn main() {
             }
         };
         let resp = match u_client
-            .post("https://unifi.b6f.net/api/login")
+            .post(format!("{}/api/login", &conf.unifi_url))
             .body(body)
             .send()
         {
@@ -114,7 +125,7 @@ fn main() {
 
         println!("Unifi login successsful");
 
-        let wanip = match get_unifi_ip(&mut u_client) {
+        let wanip = match get_unifi_ip(&mut u_client, &conf) {
             Ok(opt) => match opt {
                 Some(ip) => ip,
                 None => {
@@ -194,9 +205,9 @@ fn read_config() -> Result<Config> {
 }
 
 /// Get the IP address of the WAN interface from the Unifi Controller
-fn get_unifi_ip(client: &mut reqwest::blocking::Client) -> Result<Option<Ipv4Addr>> {
+fn get_unifi_ip(client: &mut reqwest::blocking::Client, conf: &Config) -> Result<Option<Ipv4Addr>> {
     let resp = client
-        .get("https://unifi.b6f.net/api/s/default/stat/health")
+        .get(format!("{}/api/s/default/stat/health", &conf.unifi_url))
         .send()?
         .error_for_status()?;
 

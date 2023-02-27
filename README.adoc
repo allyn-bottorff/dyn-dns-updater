@@ -1,0 +1,12 @@
+= Dynamic DNS Updater
+
+Working version written in Rust with a secondary, mostly complete version
+written in Go (prototype). This project reads a public IP address from a UniFi
+controller and then updates the apex A records for a list of zones in
+CloudFlare DNS.
+
+== Assumptions
+
+* UniFi Controller
+** Default site 
+* CloudFlare DNS

@@ -18,6 +18,7 @@ struct Config {
     unifi: UnifiCreds,
     cftoken: String,
     watch_records: Vec<String>,
+    poll_seconds: u64,
 }
 
 #[derive(Deserialize)]
@@ -70,10 +71,10 @@ fn main() {
         .build()
         .unwrap();
 
-    let conf = match read_secrets() {
+    let conf = match read_config() {
         Ok(c) => c,
         Err(e) => {
-            println!("{}", e);
+            println!("Failed to read config: {}", e);
             panic!();
             // continue;
         }
@@ -81,13 +82,13 @@ fn main() {
 
     // Loop forever with a thread sleep
     loop {
-        thread::sleep(time::Duration::new(30, 0));
+        thread::sleep(time::Duration::new(conf.poll_seconds, 0));
 
         println!("Starting IP Sync...");
         let body = match serde_json::to_string(&conf.unifi) {
             Ok(b) => b,
             Err(e) => {
-                println!("{}", e);
+                println!("Failed to parse config: {}", e);
                 panic!();
                 // continue;
             }
@@ -99,7 +100,7 @@ fn main() {
         {
             Ok(r) => r,
             Err(e) => {
-                println!("{}", e);
+                println!("Failed to login to UniFi controller: {}", e);
                 // panic!();
                 continue;
             }
@@ -123,7 +124,7 @@ fn main() {
                 }
             },
             Err(e) => {
-                println!("{}", e);
+                println!("Failed to retrieve WAN IP: {}", e);
                 // panic!();
                 continue;
             }
@@ -136,7 +137,7 @@ fn main() {
         let zones = match get_zones(&c_client, &conf.cftoken) {
             Ok(z) => z,
             Err(e) => {
-                println!("{}", e);
+                println!("Failed to get zones from CloudFlare: {}", e);
                 // panic!();
                 continue;
             }
@@ -158,7 +159,7 @@ fn main() {
                         }
                     },
                     Err(e) => {
-                        println!("{}", e);
+                        println!("Failed to get apex A record: {}", e);
                         // panic!();
                         continue;
                     }
@@ -171,7 +172,7 @@ fn main() {
                             println!("Updated {} with IP: {}", &zone.name, wanip.to_string());
                         }
                         Err(e) => {
-                            println!("{}", e);
+                            println!("Failed to update IP: {}", e);
                             // panic!();
                             continue;
                         }
@@ -184,8 +185,8 @@ fn main() {
 }
 
 /// Read Unifi login credentials from a file
-fn read_secrets() -> Result<Config> {
-    let contents = fs::read_to_string("./creds.json")?;
+fn read_config() -> Result<Config> {
+    let contents = fs::read_to_string("/secrets/config.json")?;
 
     let creds: Config = serde_json::from_str(&contents)?;
 

@@ -59,73 +59,32 @@ struct Record {
     content: String,
 }
 
+// Box up errors with the Error trait so we can simply return Results with multiple kinds of errors
+// without having messy return signatures or extra custom defined enums.
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 /// Read secrets and config
 /// Get IP from Unifi
-/// Get IP from Cloudflare
+/// Get IP from Cloudflare zones
 /// Check if different
 /// -- If different, update zone apex records in Cloudflare
 /// Sleep 10 minutes or so.
 fn main() {
-
     let conf = match read_config() {
         Ok(c) => c,
         Err(e) => {
             println!("Failed to read config: {}", e);
-            panic!();
-            // continue;
+            panic!(); // If the config can't be parsed, don't try to recover.
         }
     };
-    let mut u_client = reqwest::blocking::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
 
-    if conf.disable_unifi_tls_validation {
-    u_client = reqwest::blocking::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .cookie_store(true)
-        .build()
-        .unwrap();
-    }
-
-
-    // Loop forever with a thread sleep
+    // Loop forever with a thread sleep at the start
     loop {
         thread::sleep(time::Duration::new(conf.poll_seconds, 0));
 
         println!("Starting IP Sync...");
-        let body = match serde_json::to_string(&conf.unifi_creds) {
-            Ok(b) => b,
-            Err(e) => {
-                println!("Failed to parse config: {}", e);
-                panic!();
-                // continue;
-            }
-        };
-        let resp = match u_client
-            .post(format!("{}/api/login", &conf.unifi_url))
-            .body(body)
-            .send()
-        {
-            Ok(r) => r,
-            Err(e) => {
-                println!("Failed to login to UniFi controller: {}", e);
-                // panic!();
-                continue;
-            }
-        };
 
-        if resp.status() != reqwest::StatusCode::OK {
-            println!("UniFi login failed: {}", resp.status().to_string());
-            // panic!();
-            continue;
-        }
-
-        println!("Unifi login successsful");
-
-        let wanip = match get_unifi_ip(&mut u_client, &conf) {
+        let wanip = match get_unifi_ip(&conf) {
             Ok(opt) => match opt {
                 Some(ip) => ip,
                 None => {
@@ -154,9 +113,8 @@ fn main() {
             }
         };
 
-        // println!("Cloudflare Zones:");
-        // println!("{:?}", zones);
-
+        // Loop over the zones from cloudflare and check for ip mismatches.
+        // Update the A records if there is a mismatch
         for zone in zones {
             if conf.watch_records.contains(&zone.name) {
                 println!("Checking zone: {}", zone.name);
@@ -188,7 +146,6 @@ fn main() {
                             continue;
                         }
                     };
-                    //update record
                 }
             }
         }
@@ -204,8 +161,32 @@ fn read_config() -> Result<Config> {
     Ok(creds)
 }
 
-/// Get the IP address of the WAN interface from the Unifi Controller
-fn get_unifi_ip(client: &mut reqwest::blocking::Client, conf: &Config) -> Result<Option<Ipv4Addr>> {
+/// Log into the UniFi Controller and get the WAN IP from the API
+fn get_unifi_ip(conf: &Config) -> Result<Option<Ipv4Addr>> {
+    // Create a client which can store cookies for auth.
+    let mut client = reqwest::blocking::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
+    // Disable TLS validation if required.
+    if conf.disable_unifi_tls_validation {
+        client = reqwest::blocking::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .cookie_store(true)
+            .build()
+            .unwrap();
+    }
+
+    let body = serde_json::to_string(&conf.unifi_creds)?; // This shouldn't fail because the data
+                                                          // has already been packed into a struct, but just in case, we'll pass the error up.
+
+    let _resp = client
+        .post(format!("{}/api/login", &conf.unifi_url))
+        .body(body)
+        .send()?
+        .error_for_status()?;
+
     let resp = client
         .get(format!("{}/api/s/default/stat/health", &conf.unifi_url))
         .send()?
@@ -241,7 +222,7 @@ fn get_zones(client: &reqwest::blocking::Client, token: &String) -> Result<Vec<Z
     Ok(zone_result.result)
 }
 
-/// Get the apex A record from a zone
+/// Get the apex A record from a zone in cloudflare
 fn get_apex(
     zone: &Zone,
     client: &reqwest::blocking::Client,
@@ -268,7 +249,7 @@ fn get_apex(
     Ok(None)
 }
 
-/// Update an A record
+/// Update an A record in cloudflare
 fn update_apex(
     zone: &Zone,
     record: &Record,
